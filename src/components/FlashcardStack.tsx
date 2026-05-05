@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Eye, RotateCcw, Trash2, Check, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,25 +8,43 @@ interface Props {
   cards: Flashcard[];
 }
 
+// Deterministic shuffle from a numeric seed (mulberry32) — pure, no state needed.
+function shuffleWithSeed<T>(arr: T[], seed: number): T[] {
+  const a = arr.slice();
+  let t = seed >>> 0;
+  const rand = () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export function FlashcardStack({ cards }: Props) {
-  const [order, setOrder] = useState<string[]>(() => cards.map((c) => c.id));
-  const [index, setIndex] = useState(0);
+  // shuffleSeed = 0 means "no shuffle / use natural order".
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+  // currentId tracks which card is on top. If null, fall back to first card of the derived stack.
+  const [currentId, setCurrentId] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
 
-  // Re-sync if cards list changes (filtering, add/delete)
-  const signature = cards.map((c) => c.id).join("|");
-  useEffect(() => {
-    setOrder(cards.map((c) => c.id));
-    setIndex(0);
-    setRevealed(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  // Derived stack — purely from inputs + shuffleSeed. No state syncing.
+  const stack = useMemo(() => {
+    if (shuffleSeed === 0) return cards;
+    return shuffleWithSeed(cards, shuffleSeed);
+  }, [cards, shuffleSeed]);
 
-  const cardMap = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
-  const stack = useMemo(
-    () => order.map((id) => cardMap.get(id)).filter(Boolean) as Flashcard[],
-    [order, cardMap],
-  );
+  // Derive the current index from currentId. Reset to 0 if the id is no longer present.
+  const index = useMemo(() => {
+    if (currentId == null) return 0;
+    const i = stack.findIndex((c) => c.id === currentId);
+    return i === -1 ? 0 : i;
+  }, [stack, currentId]);
 
   if (stack.length === 0) {
     return (
@@ -40,26 +58,30 @@ export function FlashcardStack({ cards }: Props) {
   const remaining = stack.length - index;
 
   const shuffle = () => {
-    const shuffled = [...order].sort(() => Math.random() - 0.5);
-    setOrder(shuffled);
-    setIndex(0);
+    // New random seed → triggers re-derivation of `stack`.
+    setShuffleSeed(Math.max(1, (Math.random() * 0xffffffff) | 0));
+    setCurrentId(null);
     setRevealed(false);
   };
 
-  const next = () => {
+  const advance = () => {
     setRevealed(false);
-    setIndex((i) => (i + 1 < stack.length ? i + 1 : 0));
+    const nextIndex = index + 1 < stack.length ? index + 1 : 0;
+    setCurrentId(stack[nextIndex]?.id ?? null);
   };
 
   const handleResult = (r: "right" | "partial" | "wrong") => {
     recordResult(current.id, r);
-    next();
+    advance();
   };
 
   const handleDelete = () => {
     if (confirm("Excluir este card?")) {
+      // After delete, point to the next card (or wrap). Derivation will resolve naturally.
+      const nextId = stack[index + 1]?.id ?? stack[0]?.id ?? null;
+      setCurrentId(nextId === current.id ? null : nextId);
+      setRevealed(false);
       deleteCard(current.id);
-      next();
     }
   };
 
