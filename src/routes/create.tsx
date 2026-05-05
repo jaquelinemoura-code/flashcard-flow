@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,9 +26,13 @@ function CreatePage() {
   const [tag, setTag] = useState<Tag>("Gramática");
   const [level, setLevel] = useState<Level>(1);
 
+  const didCheck = useRef(false);
   useEffect(() => {
+    if (didCheck.current) return;
+    didCheck.current = true;
     if (!getAuth()) navigate({ to: "/login" });
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
