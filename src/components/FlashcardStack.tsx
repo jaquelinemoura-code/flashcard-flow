@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Eye, RotateCcw, Trash2, Check, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,15 +15,18 @@ export function FlashcardStack({ cards }: Props) {
 
   // Re-sync if cards list changes (filtering, add/delete)
   const signature = cards.map((c) => c.id).join("|");
-  useMemo(() => {
+  useEffect(() => {
     setOrder(cards.map((c) => c.id));
     setIndex(0);
     setRevealed(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
   const cardMap = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
-  const stack = order.map((id) => cardMap.get(id)).filter(Boolean) as Flashcard[];
+  const stack = useMemo(
+    () => order.map((id) => cardMap.get(id)).filter(Boolean) as Flashcard[],
+    [order, cardMap],
+  );
 
   if (stack.length === 0) {
     return (
