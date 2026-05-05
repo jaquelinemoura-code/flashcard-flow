@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Filter } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -45,13 +45,18 @@ function Dashboard() {
   const [tag, setTag] = useState<TagFilter>("all");
   const [perf, setPerf] = useState<PerfFilter>("all");
 
+  const didRedirect = useRef(false);
   useEffect(() => {
+    if (didRedirect.current) return;
+    didRedirect.current = true;
     if (!getAuth()) {
       navigate({ to: "/login" });
     } else {
       seedDemoIfEmpty();
     }
-  }, [navigate]);
+    // Run once on mount only — navigate is stable but we guard anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     return cards.filter((c) => {

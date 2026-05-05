@@ -20,66 +20,115 @@ export interface Flashcard {
 const CARDS_KEY = "fc:cards:v1";
 const AUTH_KEY = "fc:auth:v1";
 
-function read<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
+/* ---------- listeners ---------- */
 const listeners = new Set<() => void>();
 function emit() {
   listeners.forEach((l) => l());
 }
 function subscribe(l: () => void) {
   listeners.add(l);
-  return () => listeners.delete(l);
+  return () => {
+    listeners.delete(l);
+  };
+}
+
+/* ---------- Cards: cached snapshot ----------
+ * useSyncExternalStore requires getSnapshot() to return a STABLE reference
+ * between renders unless the data actually changed. We cache the array and
+ * only replace it inside setCards().
+ */
+const EMPTY_CARDS: Flashcard[] = [];
+let cardsSnapshot: Flashcard[] | null = null;
+
+function loadCardsFromStorage(): Flashcard[] {
+  if (typeof window === "undefined") return EMPTY_CARDS;
+  try {
+    const raw = localStorage.getItem(CARDS_KEY);
+    if (!raw) return EMPTY_CARDS;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Flashcard[]) : EMPTY_CARDS;
+  } catch {
+    return EMPTY_CARDS;
+  }
+}
+
+function getCardsSnapshot(): Flashcard[] {
+  if (cardsSnapshot === null) {
+    cardsSnapshot = loadCardsFromStorage();
+  }
+  return cardsSnapshot;
+}
+
+function getServerCardsSnapshot(): Flashcard[] {
+  return EMPTY_CARDS;
+}
+
+function writeCards(next: Flashcard[]) {
+  cardsSnapshot = next;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(CARDS_KEY, JSON.stringify(next));
+    } catch {
+      // ignore quota errors
+    }
+  }
+  emit();
 }
 
 /* ---------- Auth ---------- */
-export function getAuth(): { email: string } | null {
-  return read<{ email: string } | null>(AUTH_KEY, null);
+type Auth = { email: string } | null;
+let authSnapshot: Auth | undefined;
+
+function loadAuthFromStorage(): Auth {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    return raw ? (JSON.parse(raw) as Auth) : null;
+  } catch {
+    return null;
+  }
 }
+
+export function getAuth(): Auth {
+  if (authSnapshot === undefined) {
+    authSnapshot = loadAuthFromStorage();
+  }
+  return authSnapshot;
+}
+
 export function login(email: string) {
-  localStorage.setItem(AUTH_KEY, JSON.stringify({ email }));
+  authSnapshot = { email };
+  if (typeof window !== "undefined") {
+    localStorage.setItem(AUTH_KEY, JSON.stringify(authSnapshot));
+  }
   emit();
 }
+
 export function logout() {
-  localStorage.removeItem(AUTH_KEY);
+  authSnapshot = null;
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(AUTH_KEY);
+  }
   emit();
 }
-export function useAuth() {
-  const [snap, setSnap] = useState<{ email: string } | null>(null);
+
+export function useAuth(): Auth {
+  // Local state, updated only when listeners notify a real change.
+  const [snap, setSnap] = useState<Auth>(() => getAuth());
   useEffect(() => {
+    // Sync once on mount in case storage changed before subscribe.
     setSnap(getAuth());
-    const unsub = subscribe(() => setSnap(getAuth()));
-    return () => {
-      unsub();
-    };
+    return subscribe(() => setSnap(getAuth()));
   }, []);
   return snap;
 }
 
-/* ---------- Cards ---------- */
-function getCards(): Flashcard[] {
-  return read<Flashcard[]>(CARDS_KEY, []);
-}
-function setCards(cards: Flashcard[]) {
-  localStorage.setItem(CARDS_KEY, JSON.stringify(cards));
-  emit();
-}
-
+/* ---------- Cards hook ---------- */
 export function useCards(): Flashcard[] {
-  return useSyncExternalStore(
-    subscribe,
-    getCards,
-    () => [],
-  );
+  return useSyncExternalStore(subscribe, getCardsSnapshot, getServerCardsSnapshot);
 }
 
+/* ---------- Mutations ---------- */
 export function addCard(input: Omit<Flashcard, "id" | "stats" | "lastResult" | "createdAt">) {
   const card: Flashcard = {
     ...input,
@@ -88,16 +137,16 @@ export function addCard(input: Omit<Flashcard, "id" | "stats" | "lastResult" | "
     lastResult: "unseen",
     createdAt: Date.now(),
   };
-  setCards([card, ...getCards()]);
+  writeCards([card, ...getCardsSnapshot()]);
 }
 
 export function deleteCard(id: string) {
-  setCards(getCards().filter((c) => c.id !== id));
+  writeCards(getCardsSnapshot().filter((c) => c.id !== id));
 }
 
 export function recordResult(id: string, result: "right" | "partial" | "wrong") {
-  setCards(
-    getCards().map((c) =>
+  writeCards(
+    getCardsSnapshot().map((c) =>
       c.id === id
         ? {
             ...c,
@@ -110,7 +159,7 @@ export function recordResult(id: string, result: "right" | "partial" | "wrong") 
 }
 
 export function seedDemoIfEmpty() {
-  if (getCards().length > 0) return;
+  if (getCardsSnapshot().length > 0) return;
   const demos: Flashcard[] = [
     {
       id: crypto.randomUUID(),
@@ -133,5 +182,5 @@ export function seedDemoIfEmpty() {
       createdAt: Date.now() - 1000,
     },
   ];
-  setCards(demos);
+  writeCards(demos);
 }
