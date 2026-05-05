@@ -55,7 +55,10 @@ export function useAuth() {
   const [snap, setSnap] = useState<{ email: string } | null>(null);
   useEffect(() => {
     setSnap(getAuth());
-    return subscribe(() => setSnap(getAuth()));
+    const unsub = subscribe(() => setSnap(getAuth()));
+    return () => {
+      unsub();
+    };
   }, []);
   return snap;
 }
