@@ -17,7 +17,7 @@ export interface Flashcard {
   createdAt: number;
 }
 
-const CARDS_KEY = "fc:cards:v1";
+const CARDS_KEY = "fc:cards:v2";
 const AUTH_KEY = "fc:auth:v1";
 
 /* ---------- listeners ---------- */
