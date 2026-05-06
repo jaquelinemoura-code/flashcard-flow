@@ -97,18 +97,22 @@ export function FlashcardStack({ cards }: Props) {
       </div>
 
       <div className="relative h-[420px] md:h-[460px]">
-        {stack.slice(index, index + 3).reverse().map((c, i, arr) => {
+        {stack.slice(index, index + 4).reverse().map((c, i, arr) => {
           const depth = arr.length - 1 - i;
           const isTop = depth === 0;
+          const shadow = isTop
+            ? "0 20px 40px -20px color-mix(in oklab, var(--primary) 25%, transparent), 0 8px 16px -8px rgb(0 0 0 / 0.08)"
+            : `0 ${10 + depth * 4}px ${20 + depth * 6}px -12px rgb(0 0 0 / ${0.08 + depth * 0.02})`;
           return (
             <div
               key={c.id}
               className="absolute inset-x-0 mx-auto flex h-full w-full max-w-xl flex-col rounded-3xl border border-border bg-card p-6 transition-all md:p-8"
               style={{
-                transform: `translateY(${depth * 12}px) scale(${1 - depth * 0.04})`,
+                transform: `translateY(${depth * 14}px) scale(${1 - depth * 0.05})`,
                 zIndex: 10 - depth,
-                opacity: isTop ? 1 : 0.7,
-                boxShadow: "var(--shadow-card)",
+                opacity: isTop ? 1 : 1 - depth * 0.18,
+                boxShadow: shadow,
+                pointerEvents: isTop ? "auto" : "none",
               }}
             >
               <div className="flex items-center justify-between gap-2">
