@@ -96,7 +96,7 @@ export function FlashcardStack({ cards }: Props) {
         </Button>
       </div>
 
-      <div className="relative h-[420px] md:h-[460px]">
+      <div className="relative h-[460px] pt-12 md:h-[500px] md:pt-14">
         {stack.slice(index, index + 4).reverse().map((c, i, arr) => {
           const depth = arr.length - 1 - i;
           const isTop = depth === 0;
@@ -106,9 +106,13 @@ export function FlashcardStack({ cards }: Props) {
           return (
             <div
               key={c.id}
-              className="absolute inset-x-0 mx-auto flex h-full w-full max-w-xl flex-col rounded-3xl border border-border bg-card p-6 transition-all md:p-8"
+              className="absolute inset-x-0 top-0 mx-auto flex w-full max-w-xl flex-col rounded-3xl border border-border bg-card p-6 transition-all md:p-8"
               style={{
-                transform: `translateY(${depth * 14}px) scale(${1 - depth * 0.05})`,
+                // Background cards peek ABOVE the top card (negative Y) and are slightly narrower.
+                top: `${depth * -12}px`,
+                height: `calc(100% - ${depth * -12}px)`,
+                transform: `scale(${1 - depth * 0.04})`,
+                transformOrigin: "top center",
                 zIndex: 10 - depth,
                 opacity: isTop ? 1 : 1 - depth * 0.18,
                 boxShadow: shadow,
